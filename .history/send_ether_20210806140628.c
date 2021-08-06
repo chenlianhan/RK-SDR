@@ -35,20 +35,6 @@ int flags = 0;
 int data_index = 0;
 
 
-
-void printf2(uint16_t n) {
-    uint16_t i = 0;
-    for(i = 0; i < 16; i++) {
-        if(n & (0x8000) >> i) {
-            printf("1");
-        }else {
-            printf("0");
-        }
-    }
-    printf("\n");
-}
-
-
 /**
  *  Convert readable MAC address to binary format.
  *
@@ -223,6 +209,102 @@ struct ethernet_frame {
 
 
 /**
+ *  Send data through given iface by ethernet protocol, using raw socket.
+ *
+ *  Arguments
+ *      iface: name of iface for sending.
+ *
+ *      to: destination MAC address, in binary format.
+ *
+ *      type: protocol type.
+ *
+ *      data: data to send.
+ *
+ *      s: socket for ioctl, optional.
+ *
+ *  Returns
+ *      0 if success, -1 if error.
+ **/
+int send_ether(char const *iface, unsigned char const *to, short type,
+        uint16_t *data, int s) {
+    // value to return, 0 for success, -1 for error
+    int value_to_return = -1;
+
+    // create socket if needed(s is not given)
+    bool create_socket = (s < 0);
+    if (create_socket) {
+        s = socket(PF_PACKET, SOCK_RAW | SOCK_CLOEXEC, 0);
+        if (-1 == s) {
+            return value_to_return;
+        }
+    }
+
+    // bind socket with iface
+    int ret = bind_iface(s, iface);
+    if (-1 == ret) {
+        goto cleanup;
+    }
+
+    // fetch MAC address of given iface, which is the source address
+    unsigned char fr[6];
+    ret = fetch_iface_mac(iface, fr, s);
+    if (-1 == ret) {
+        goto cleanup;
+    }
+
+    // construct ethernet frame, which can be 1514 bytes at most
+    struct ethernet_frame frame;
+
+    // fill destination MAC address
+    memcpy(frame.dst_addr, to, MAC_BYTES);
+
+    // fill source MAC address
+    memcpy(frame.src_addr, fr, MAC_BYTES);
+    
+    // fill type
+    frame.type = htons(type);
+    // printf("type:%u \n",frame.type);
+    // truncate if data is too long
+    if (data_size > MAX_ETHERNET_DATA_SIZE) {
+        data_size = MAX_ETHERNET_DATA_SIZE;
+    }
+    
+    frame.length = htons(data_size);
+
+    printf2(data[1]);
+    // printf("length:%u \n",frame.length);
+    if(file_read == 0) {
+        // fill data
+        memcpy(frame.data, data, data_size);
+
+        frame_size = ETHERNET_HEADER_SIZE + data_size;
+
+    }else {
+        memcpy(frame.data, data, file_data_size);
+
+        frame_size = ETHERNET_HEADER_SIZE + file_data_size;
+    }
+    
+
+    ret = sendto(s, &frame, frame_size, 0, NULL, 0);
+    if (-1 == ret) {
+        goto cleanup;
+    }
+
+    // set return value to 0 if success
+    value_to_return = 0;
+
+cleanup:
+    // close socket if created here
+    if (create_socket) {
+        close(s);
+    }
+
+    return value_to_return;
+}
+
+
+/**
  * struct for storing command line arguments.
  **/
 struct arguments {
@@ -247,6 +329,19 @@ struct arguments {
     // sample rate
     float sample_rate;
 };
+
+void printf2(uint16_t n) {
+    uint16_t i = 0;
+    for(i = 0; i < 16; i++) {
+        if(n & (0x8000) >> i) {
+            printf("1");
+        }else {
+            printf("0");
+        }
+    }
+    printf("\n");
+}
+
 
 
 /**
@@ -459,7 +554,7 @@ void test_write2(uint16_t *d, uint16_t data[]) {
  *      No return.
  **/
 void signal_generate(struct arguments *arguments) {
-    uint16_t data[DATA_BUFFER + 1] = {0};
+    uint16_t data[DATA_BUFFER - 1] = {0};
 
     unsigned int i = 0;
     unsigned int aver = MAX_LEVEL/2;
@@ -492,105 +587,6 @@ void signal_generate(struct arguments *arguments) {
     test_write2(arguments->data, data);
 }
 
-/**
- *  Send data through given iface by ethernet protocol, using raw socket.
- *
- *  Arguments
- *      iface: name of iface for sending.
- *
- *      to: destination MAC address, in binary format.
- *
- *      type: protocol type.
- *
- *      data: data to send.
- *
- *      s: socket for ioctl, optional.
- *
- *  Returns
- *      0 if success, -1 if error.
- **/
-int send_ether(char const *iface, unsigned char const *to, short type,
-        uint16_t *data, struct arguments *arguments, int s) {
-    // value to return, 0 for success, -1 for error
-    int value_to_return = -1;
-
-    // create socket if needed(s is not given)
-    bool create_socket = (s < 0);
-    if (create_socket) {
-        s = socket(PF_PACKET, SOCK_RAW | SOCK_CLOEXEC, 0);
-        if (-1 == s) {
-            return value_to_return;
-        }
-    }
-
-    // bind socket with iface
-    int ret = bind_iface(s, iface);
-    if (-1 == ret) {
-        goto cleanup;
-    }
-
-    // fetch MAC address of given iface, which is the source address
-    unsigned char fr[6];
-    ret = fetch_iface_mac(iface, fr, s);
-    if (-1 == ret) {
-        goto cleanup;
-    }
-
-    // construct ethernet frame, which can be 1514 bytes at most
-    struct ethernet_frame frame;
-
-    // fill destination MAC address
-    memcpy(frame.dst_addr, to, MAC_BYTES);
-
-    // fill source MAC address
-    memcpy(frame.src_addr, fr, MAC_BYTES);
-    
-    // fill type
-    frame.type = htons(type);
-
-    signal_generate(arguments);
-    
-    // printf("type:%u \n",frame.type);
-    // truncate if data is too long
-    if (data_size > MAX_ETHERNET_DATA_SIZE) {
-        data_size = MAX_ETHERNET_DATA_SIZE;
-    }
-    
-    frame.length = htons(data_size);
-
-    // printf("length:%u \n",frame.length);
-    if(file_read == 0) {
-        // fill data
-        memcpy(frame.data, data, data_size);
-
-        frame_size = ETHERNET_HEADER_SIZE + data_size;
-
-    }else {
-        memcpy(frame.data, data, file_data_size);
-
-        frame_size = ETHERNET_HEADER_SIZE + file_data_size;
-    }
-    
-
-    ret = sendto(s, &frame, frame_size, 0, NULL, 0);
-    if (-1 == ret) {
-        goto cleanup;
-    }
-
-    // set return value to 0 if success
-    value_to_return = 0;
-
-cleanup:
-    // close socket if created here
-    if (create_socket) {
-        close(s);
-    }
-
-    return value_to_return;
-}
-
-
-
 int main(int argc, char *argv[]) {
 
     // parse command line options to struct arguments
@@ -612,14 +608,14 @@ int main(int argc, char *argv[]) {
         if(flags == 0) {
             //send data just once
             ret = send_ether(arguments->iface, to, arguments->type,
-                     arguments->data, arguments, -1);
+                     arguments->data, -1);
             print_mesg(arguments, ret);
             return 0;
         }else if(flags == 1) {
             //send data again and again
             signal_generate(arguments);
             ret = send_ether(arguments->iface, to, arguments->type,
-                     arguments->data, arguments, -1);
+                     arguments->data, -1);
             print_mesg(arguments, ret);
         }else {
             perror("Fail to send ethernet frame: ");

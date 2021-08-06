@@ -1,3 +1,4 @@
+      
 #include <argp.h>
 #include <arpa/inet.h>
 #include <linux/if_packet.h>
@@ -33,20 +34,6 @@ int file_read = 0;
 int file_data_size = 0;
 int flags = 0;
 int data_index = 0;
-
-
-
-void printf2(uint16_t n) {
-    uint16_t i = 0;
-    for(i = 0; i < 16; i++) {
-        if(n & (0x8000) >> i) {
-            printf("1");
-        }else {
-            printf("0");
-        }
-    }
-    printf("\n");
-}
 
 
 /**
@@ -222,6 +209,8 @@ struct ethernet_frame {
 };
 
 
+
+
 /**
  * struct for storing command line arguments.
  **/
@@ -263,6 +252,7 @@ static error_t opt_handler(int key, char *arg, struct argp_state *state) {
             if (sscanf(arg, "%d", &arguments->data) != 1) {
                 return ARGP_ERR_UNKNOWN;
             }
+            break;
             break;
 
         case 'i':
@@ -417,6 +407,17 @@ int print_mesg(struct arguments *arguments ,int ret) {
     }
 }
 
+void printf2(uint16_t n) {
+    uint16_t i = 0;
+    for(i = 0; i < 16; i++) {
+        if(n & (0x8000) >> i) {
+            printf("1");
+        }else {
+            printf("0");
+        }
+    }
+    printf("\n");
+}
 
 
 /**
@@ -471,13 +472,14 @@ void signal_generate(struct arguments *arguments) {
     uint16_t I_amp = 0, Q_amp = 0;
 
 
-    for(i = 0; i < DATA_BUFFER / 2 - 1; i++) {
+    for(i = 0; i < DATA_BUFFER / 2 + 3; i++) {
         I_temp = aver * sin(rad * data_index) + aver;
         I_amp = (uint16_t)I_temp;
         Q_temp = aver * cos(rad * data_index) + aver;
         Q_amp = (uint16_t)Q_temp;
         data[i * 2] = I_amp;
         data[i * 2 + 1] = Q_amp;
+
         res = data_index * (freq/arguments->sample_rate);
 
         if(fmod(res, key) == 0 && data_index > 0) {
@@ -509,8 +511,7 @@ void signal_generate(struct arguments *arguments) {
  *  Returns
  *      0 if success, -1 if error.
  **/
-int send_ether(char const *iface, unsigned char const *to, short type,
-        uint16_t *data, struct arguments *arguments, int s) {
+int send_ether(char const *iface, unsigned char const *to, short type, struct arguments *arguments, int s) {
     // value to return, 0 for success, -1 for error
     int value_to_return = -1;
 
@@ -549,24 +550,23 @@ int send_ether(char const *iface, unsigned char const *to, short type,
     frame.type = htons(type);
 
     signal_generate(arguments);
-    
-    // printf("type:%u \n",frame.type);
+
     // truncate if data is too long
     if (data_size > MAX_ETHERNET_DATA_SIZE) {
         data_size = MAX_ETHERNET_DATA_SIZE;
     }
     
+    // memcpy(frame.length,)
     frame.length = htons(data_size);
 
-    // printf("length:%u \n",frame.length);
     if(file_read == 0) {
         // fill data
-        memcpy(frame.data, data, data_size);
+        memcpy(frame.data, arguments->data, data_size);
 
         frame_size = ETHERNET_HEADER_SIZE + data_size;
 
     }else {
-        memcpy(frame.data, data, file_data_size);
+        memcpy(frame.data, arguments->data, file_data_size);
 
         frame_size = ETHERNET_HEADER_SIZE + file_data_size;
     }
@@ -611,15 +611,13 @@ int main(int argc, char *argv[]) {
     while(true) {
         if(flags == 0) {
             //send data just once
-            ret = send_ether(arguments->iface, to, arguments->type,
-                     arguments->data, arguments, -1);
+            ret = send_ether(arguments->iface, arguments->to, arguments->type, -1);
             print_mesg(arguments, ret);
             return 0;
         }else if(flags == 1) {
             //send data again and again
-            signal_generate(arguments);
-            ret = send_ether(arguments->iface, to, arguments->type,
-                     arguments->data, arguments, -1);
+            // signal_generate(arguments);
+            ret = send_ether(arguments->iface, arguments->to, arguments->type, arguments, -1);
             print_mesg(arguments, ret);
         }else {
             perror("Fail to send ethernet frame: ");
@@ -627,3 +625,5 @@ int main(int argc, char *argv[]) {
         }
     }
 }
+
+    
