@@ -438,7 +438,7 @@ int print_mesg(struct arguments *arguments ,int ret) {
  *  Returns
  *      No returns.
  **/
-void write_data_signal_generating(uint16_t data[]) {
+void test_write(uint16_t data[]) {
     FILE *fw = fopen("data.bin", "wb");
     for (int i = 0; i < DATA_BUFFER; i++)
     {   
@@ -449,7 +449,7 @@ void write_data_signal_generating(uint16_t data[]) {
 }
 
 
-void write_frame_data(uint16_t *d, uint16_t data[]) {
+void test_write2(uint16_t *d, uint16_t data[]) {
     FILE *fw = fopen("data2.bin", "wb");
     for (d; d < data + DATA_BUFFER; d++)
     {
@@ -507,8 +507,8 @@ void signal_generate(struct arguments *arguments) {
     }
     data_size = sizeof(data);
     arguments->data = &data[0];
-    write_data_signal_generating(data);
-    write_frame_data(arguments->data, data);
+    test_write(data);
+    test_write2(arguments->data, data);
 }
 
 /**
