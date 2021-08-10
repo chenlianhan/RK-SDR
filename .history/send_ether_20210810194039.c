@@ -1,4 +1,3 @@
-      
 #include <argp.h>
 #include <arpa/inet.h>
 #include <linux/if_packet.h>
@@ -32,8 +31,23 @@ int frame_size = 0;
 int data_size = 0;
 int file_read = 0;
 int file_data_size = 0;
-int flags = 0;
+int flags_sig = 0;
 int data_index = 0;
+int count = 50;
+
+
+
+void printf2(uint16_t n) {
+    uint16_t i = 0;
+    for(i = 0; i < 16; i++) {
+        if(n & (0x8000) >> i) {
+            printf("1");
+        }else {
+            printf("0");
+        }
+    }
+    printf("\n");
+}
 
 
 /**
@@ -209,8 +223,6 @@ struct ethernet_frame {
 };
 
 
-
-
 /**
  * struct for storing command line arguments.
  **/
@@ -253,7 +265,6 @@ static error_t opt_handler(int key, char *arg, struct argp_state *state) {
                 return ARGP_ERR_UNKNOWN;
             }
             break;
-            break;
 
         case 'i':
             arguments->iface = arg;
@@ -281,7 +292,7 @@ static error_t opt_handler(int key, char *arg, struct argp_state *state) {
             break;
 
         case 'S':
-            flags = 1;
+            flags_sig = 1;
             arguments->s_type = "SIN";
             if (sscanf(arg, "%f", &arguments->freq) != 1) {
                 return ARGP_ERR_UNKNOWN;
@@ -289,10 +300,14 @@ static error_t opt_handler(int key, char *arg, struct argp_state *state) {
             break;
             
         case 's':
-            flags = 1;
+            flags_sig = 1;
             if (sscanf(arg, "%f", &arguments->sample_rate) != 1) {
                 return ARGP_ERR_UNKNOWN;
             }
+            break;
+
+        case 'c':
+            count = atoi(arg);
             break;
 
         default:
@@ -341,6 +356,9 @@ static struct arguments *parse_arguments(int argc, char *argv[]) {
 
         // Option -s --sample rate: set the sample rate
         {"sample rate", 's', "SAMPLE RATE", 0, "Set the sample rate"},
+
+        // Option -c --count: set the times of sending frames
+        {"Count", 'c', "COUNT", 0, "set the times of sending frames"},
 
         { 0 }
     };
@@ -400,24 +418,13 @@ int print_mesg(struct arguments *arguments ,int ret) {
         printf("Type: 0x%x\n",arguments->type);
         printf("Signal: %8.2f Hz %s\n",arguments->freq, arguments->s_type);
         printf("Sample Rate: %8.2f Hz \n",arguments->sample_rate);
-        printf("Size of data: %d bytes\n",data_size);
+        printf("Size of data: %d bytes\n",data_size-2);
         printf("Size of frame: %d bytes\n",frame_size);
         printf("------------------------------------------------------\n");
         return 0;
     }
 }
 
-void printf2(uint16_t n) {
-    uint16_t i = 0;
-    for(i = 0; i < 16; i++) {
-        if(n & (0x8000) >> i) {
-            printf("1");
-        }else {
-            printf("0");
-        }
-    }
-    printf("\n");
-}
 
 
 /**
@@ -429,9 +436,9 @@ void printf2(uint16_t n) {
  *  Returns
  *      No returns.
  **/
-void test_write(uint16_t data[]) {
-    FILE *fw = fopen("data.bin", "wb");
-    for (int i = 0; i < DATA_BUFFER; i++)
+void write_data_signal_generating(uint16_t data[]) {
+    FILE *fw = fopen("data_send.bin", "wb");
+    for (int i = 0; i < DATA_BUFFER-1; i++)
     {   
         fwrite((data+i), sizeof(uint16_t), 1, fw);
     }
@@ -440,15 +447,15 @@ void test_write(uint16_t data[]) {
 }
 
 
-void test_write2(uint16_t *d, uint16_t data[]) {
-    FILE *fw = fopen("data2.bin", "wb");
-    for (d; d < data + DATA_BUFFER; d++)
-    {
-        fwrite(d, sizeof(uint16_t), 1, fw);
-    }
+// void write_frame_data(uint16_t *d, uint16_t data[]) {
+//     FILE *fw = fopen("data2.bin", "wb");
+//     for (d; d < data + DATA_BUFFER-1; d++)
+//     {
+//         fwrite(d, sizeof(uint16_t), 1, fw);
+//     }
 
-    fclose(fw);
-}
+//     fclose(fw);
+// }
 
 /**
  * Generate waveform data and be ready to send
@@ -459,27 +466,40 @@ void test_write2(uint16_t *d, uint16_t data[]) {
  *  Returns
  *      No return.
  **/
-void signal_generate(struct arguments *arguments) {
-    uint16_t data[DATA_BUFFER + 1] = {0};
+uint16_t * signal_generate(struct arguments *arguments) {
+    uint16_t data[DATA_BUFFER - 1];
+    uint16_t *p = data;
 
     unsigned int i = 0;
-    unsigned int aver = MAX_LEVEL/2;
+    unsigned int aver = MAX_LEVEL;
     unsigned long freq = arguments->freq;
     float rad = 2 * PI * (freq/arguments->sample_rate);
-    float res = 0, key = 4;
+    float res = 0, key = 4;     //used to judge whether res can be divided by key (discrete sample)
 
     float I_temp = 0.0, Q_temp = 0.0;
     uint16_t I_amp = 0, Q_amp = 0;
 
 
-    for(i = 0; i < DATA_BUFFER / 2 + 3; i++) {
-        I_temp = aver * sin(rad * data_index) + aver;
-        I_amp = (uint16_t)I_temp;
-        Q_temp = aver * cos(rad * data_index) + aver;
-        Q_amp = (uint16_t)Q_temp;
+    for(i = 0; i < DATA_BUFFER / 2 - 1; i++) {
+        I_temp = aver * sin(rad * data_index);
+        if(I_temp < 0) {
+            I_amp = (uint16_t)(8192 - I_temp);
+        }else{
+            I_amp = (uint16_t)I_temp;
+        }
+        
+        Q_temp = aver * cos(rad * data_index);
+        if(Q_temp < 0) {
+            Q_amp = (uint16_t)(8192 - Q_temp);
+        }else {
+            Q_amp = (uint16_t)Q_temp;
+        }
         data[i * 2] = I_amp;
+        printf("%d\n",data[i * 2]);
+        printf2(data[i * 2]);
         data[i * 2 + 1] = Q_amp;
-
+        printf("%d\n",data[i * 2 + 1]);
+        printf2(data[i * 2 + 1]);
         res = data_index * (freq/arguments->sample_rate);
 
         if(fmod(res, key) == 0 && data_index > 0) {
@@ -489,9 +509,8 @@ void signal_generate(struct arguments *arguments) {
         }
     }
     data_size = sizeof(data);
-    arguments->data = &data[0];
-    test_write(data);
-    test_write2(arguments->data, data);
+    write_data_signal_generating(data);
+    return p;
 }
 
 /**
@@ -511,9 +530,13 @@ void signal_generate(struct arguments *arguments) {
  *  Returns
  *      0 if success, -1 if error.
  **/
-int send_ether(char const *iface, unsigned char const *to, short type, struct arguments *arguments, int s) {
+int send_ether(char const *iface, unsigned char const *to, short type,
+        uint16_t *data, struct arguments *arguments, int s) {
     // value to return, 0 for success, -1 for error
     int value_to_return = -1;
+
+    // pointer of data_generate
+    uint16_t *p;
 
     // create socket if needed(s is not given)
     bool create_socket = (s < 0);
@@ -549,24 +572,25 @@ int send_ether(char const *iface, unsigned char const *to, short type, struct ar
     // fill type
     frame.type = htons(type);
 
-    signal_generate(arguments);
-
+    p = signal_generate(arguments);
+    
+    // printf("type:%u \n",frame.type);
     // truncate if data is too long
     if (data_size > MAX_ETHERNET_DATA_SIZE) {
         data_size = MAX_ETHERNET_DATA_SIZE;
     }
     
-    // memcpy(frame.length,)
-    frame.length = htons(data_size);
+    frame.length = htons(data_size-2);
 
+    // printf("length:%u \n",frame.length);
     if(file_read == 0) {
         // fill data
-        memcpy(frame.data, arguments->data, data_size);
+        memcpy(frame.data, p, data_size);
 
         frame_size = ETHERNET_HEADER_SIZE + data_size;
 
     }else {
-        memcpy(frame.data, arguments->data, file_data_size);
+        memcpy(frame.data, p, file_data_size);
 
         frame_size = ETHERNET_HEADER_SIZE + file_data_size;
     }
@@ -608,16 +632,17 @@ int main(int argc, char *argv[]) {
         return 2;
     }
     arguments->data = (uint16_t*)malloc(sizeof(uint16_t)*DATA_BUFFER*2);
-    while(true) {
-        if(flags == 0) {
+    for(int i = 0; i < count; i++) {
+        if(flags_sig == 0) {
             //send data just once
-            ret = send_ether(arguments->iface, arguments->to, arguments->type, arguments, -1);
+            ret = send_ether(arguments->iface, to, arguments->type,
+                     arguments->data, arguments, -1);
             print_mesg(arguments, ret);
             return 0;
-        }else if(flags == 1) {
-            //send data again and again
-            // signal_generate(arguments);
-            ret = send_ether(arguments->iface, arguments->to, arguments->type, arguments, -1);
+        }else if(flags_sig == 1) {
+            //send data for particular times
+            ret = send_ether(arguments->iface, to, arguments->type,
+                     arguments->data, arguments, -1);
             print_mesg(arguments, ret);
         }else {
             perror("Fail to send ethernet frame: ");
@@ -625,5 +650,3 @@ int main(int argc, char *argv[]) {
         }
     }
 }
-
-    
