@@ -466,9 +466,8 @@ void write_frame_data(uint16_t *d, uint16_t data[]) {
  *  Returns
  *      No return.
  **/
-uint16_t * signal_generate(struct arguments *arguments) {
+void signal_generate(struct arguments *arguments, uint16_t *p) {
     uint16_t data[DATA_BUFFER - 1];
-    uint16_t *p = data;
 
     unsigned int i = 0;
     unsigned int aver = MAX_LEVEL;
@@ -509,10 +508,10 @@ uint16_t * signal_generate(struct arguments *arguments) {
         }
     }
     data_size = sizeof(data);
-    arguments->data = &data[0];
-    write_data_signal_generating(data);
-    write_frame_data(arguments->data, data);
-    return p;
+    p=data;
+    // arguments->data = &data[0];
+    // write_data_signal_generating(data);
+    // write_frame_data(arguments->data, data);
 }
 
 /**
@@ -533,11 +532,9 @@ uint16_t * signal_generate(struct arguments *arguments) {
  *      0 if success, -1 if error.
  **/
 int send_ether(char const *iface, unsigned char const *to, short type,
-        uint16_t *data, struct arguments *arguments, int s) {
+        uint16_t *data, struct arguments *arguments, int s, uint16_t *p) {
     // value to return, 0 for success, -1 for error
     int value_to_return = -1;
-
-    uint16_t *p;
 
     // create socket if needed(s is not given)
     bool create_socket = (s < 0);
@@ -573,7 +570,7 @@ int send_ether(char const *iface, unsigned char const *to, short type,
     // fill type
     frame.type = htons(type);
 
-    p = signal_generate(arguments);
+    signal_generate(arguments, p);
     
     // printf("type:%u \n",frame.type);
     // truncate if data is too long
@@ -617,6 +614,7 @@ cleanup:
 
 
 int main(int argc, char *argv[]) {
+    uint16_t *p;
 
     // parse command line options to struct arguments
     struct arguments *arguments = parse_arguments(argc, argv);
@@ -637,13 +635,14 @@ int main(int argc, char *argv[]) {
         if(flags_sig == 0) {
             //send data just once
             ret = send_ether(arguments->iface, to, arguments->type,
-                     arguments->data, arguments, -1);
+                     arguments->data, arguments, -1, p);
             print_mesg(arguments, ret);
             return 0;
         }else if(flags_sig == 1) {
             //send data for particular times
+            // signal_generate(arguments, p);
             ret = send_ether(arguments->iface, to, arguments->type,
-                     arguments->data, arguments, -1);
+                     arguments->data, arguments, -1, p);
             print_mesg(arguments, ret);
         }else {
             perror("Fail to send ethernet frame: ");

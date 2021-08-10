@@ -163,9 +163,16 @@ repeat:
 	/* UDP payload length */
 	ret = ntohs(udph->len) - sizeof(struct udphdr);
 
+	// for (i=0; i<numbytes; i++) {
+	// 	buf[i] = (buf[i]&0XFF)*256 + (buf[i]>>8);
+	// }
+
+	
 	/* Print packet */
 	printf("\tData:\n");
 	for(i=0; i<(numbytes-16)/2; i++) {
+		// printf("%d\n",buf[16+i*2]);
+		// printf("%d\n",buf[17+i*2]);
 		data_recv[i] = buf[16 + i*2] + buf[17 + i*2]*256;
 		printf2(data_recv[i]);
 	}

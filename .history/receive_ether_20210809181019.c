@@ -14,19 +14,12 @@
 /*
 Destination MAC : it should be defined accroding to situation
 */
-// #define DEST_MAC0	0xbe
-// #define DEST_MAC1	0x81
-// #define DEST_MAC2	0xbe
-// #define DEST_MAC3	0x9a
-// #define DEST_MAC4	0xb9
-// #define DEST_MAC5	0x9f
-
-#define DEST_MAC0	0x11
-#define DEST_MAC1	0x22
-#define DEST_MAC2	0x33
-#define DEST_MAC3	0x44
-#define DEST_MAC4	0x55
-#define DEST_MAC5	0x66
+#define DEST_MAC0	0xbe
+#define DEST_MAC1	0x81
+#define DEST_MAC2	0xbe
+#define DEST_MAC3	0x9a
+#define DEST_MAC4	0xb9
+#define DEST_MAC5	0x9f
 
 /* Default type of ethernet frame */
 #define ETHER_TYPE	0x0900
@@ -47,9 +40,9 @@ void printf2(uint16_t n) {
     printf("\n");
 }
 
-void write_data_recv(uint16_t data[]) {
+void write_data_recv(uint16_t data[], int numbytes) {
     FILE *fw = fopen("data_recv.bin", "wb");
-    for (int i = 0; i < DATA_SIZ - 1; i++)
+    for (int i = 0; i < numbytes; i++)
     {   
         fwrite((data+i), sizeof(uint16_t), 1, fw);
     }
@@ -66,8 +59,8 @@ int main(int argc, char *argv[])
 	struct ifreq ifopts;	/* set promiscuous mode */
 	struct ifreq if_ip;	    /* get ip addr */
 	struct sockaddr_storage their_addr;
-	uint8_t buf[BUF_SIZ];   /* storage receive bytes frome socket*/
-	uint16_t data_recv[DATA_SIZ - 1];	/* storage data after byte combination */
+	uint8_t buf[BUF_SIZ] = {0};   /* storage receive bytes frome socket*/
+	uint16_t data_recv[DATA_SIZ] = {0};	/* storage data after byte combination */
 	char ifName[IFNAMSIZ];  /* which interface it receive */
 	
 	/* Get interface name (for paticular interface) */
@@ -163,17 +156,21 @@ repeat:
 	/* UDP payload length */
 	ret = ntohs(udph->len) - sizeof(struct udphdr);
 
+	// for (i=0; i<numbytes; i++) {
+	// 	buf[i] = (buf[i]&0XFF)*256 + (buf[i]>>8);
+	// }
+
 	/* Print packet */
-	printf("\tData:\n");
-	for(i=0; i<(numbytes-16)/2; i++) {
-		data_recv[i] = buf[16 + i*2] + buf[17 + i*2]*256;
+	printf("\tData:");
+	for(i=0; i<DATA_SIZ; i++) {
+		data_recv[i] = buf[16+i*2] + buf[17+i*2]*256;
 		printf2(data_recv[i]);
 	}
 	printf("\n");
 	
 
 	/* Write Data */
-	write_data_recv(data_recv);
+	write_data_recv(data_recv, DATA_SIZ);
 
 done:	goto repeat;
 

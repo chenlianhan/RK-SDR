@@ -466,9 +466,8 @@ void write_frame_data(uint16_t *d, uint16_t data[]) {
  *  Returns
  *      No return.
  **/
-uint16_t * signal_generate(struct arguments *arguments) {
+void signal_generate(struct arguments *arguments) {
     uint16_t data[DATA_BUFFER - 1];
-    uint16_t *p = data;
 
     unsigned int i = 0;
     unsigned int aver = MAX_LEVEL;
@@ -494,12 +493,14 @@ uint16_t * signal_generate(struct arguments *arguments) {
         }else {
             Q_amp = (uint16_t)Q_temp;
         }
+        printf("%d\n",i);
         data[i * 2] = I_amp;
-        printf("%d\n",data[i * 2]);
-        printf2(data[i * 2]);
+        *(arguments->data + i*2)=I_amp;
+        printf2(I_amp);
         data[i * 2 + 1] = Q_amp;
-        printf("%d\n",data[i * 2 + 1]);
-        printf2(data[i * 2 + 1]);
+        *(arguments->data + i*2 + 1)=Q_amp;
+        printf2(Q_amp);
+        printf("%d\n",i);
         res = data_index * (freq/arguments->sample_rate);
 
         if(fmod(res, key) == 0 && data_index > 0) {
@@ -509,10 +510,9 @@ uint16_t * signal_generate(struct arguments *arguments) {
         }
     }
     data_size = sizeof(data);
-    arguments->data = &data[0];
+    // arguments->data = data;
     write_data_signal_generating(data);
     write_frame_data(arguments->data, data);
-    return p;
 }
 
 /**
@@ -536,8 +536,6 @@ int send_ether(char const *iface, unsigned char const *to, short type,
         uint16_t *data, struct arguments *arguments, int s) {
     // value to return, 0 for success, -1 for error
     int value_to_return = -1;
-
-    uint16_t *p;
 
     // create socket if needed(s is not given)
     bool create_socket = (s < 0);
@@ -573,7 +571,7 @@ int send_ether(char const *iface, unsigned char const *to, short type,
     // fill type
     frame.type = htons(type);
 
-    p = signal_generate(arguments);
+    signal_generate(arguments);
     
     // printf("type:%u \n",frame.type);
     // truncate if data is too long
@@ -586,12 +584,12 @@ int send_ether(char const *iface, unsigned char const *to, short type,
     // printf("length:%u \n",frame.length);
     if(file_read == 0) {
         // fill data
-        memcpy(frame.data, p, data_size);
+        memcpy(frame.data, data, data_size);
 
         frame_size = ETHERNET_HEADER_SIZE + data_size;
 
     }else {
-        memcpy(frame.data, p, file_data_size);
+        memcpy(frame.data, data, file_data_size);
 
         frame_size = ETHERNET_HEADER_SIZE + file_data_size;
     }
@@ -642,6 +640,7 @@ int main(int argc, char *argv[]) {
             return 0;
         }else if(flags_sig == 1) {
             //send data for particular times
+            signal_generate(arguments);
             ret = send_ether(arguments->iface, to, arguments->type,
                      arguments->data, arguments, -1);
             print_mesg(arguments, ret);

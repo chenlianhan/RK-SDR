@@ -47,9 +47,9 @@ void printf2(uint16_t n) {
     printf("\n");
 }
 
-void write_data_recv(uint16_t data[]) {
+void write_data_recv(uint16_t data[], int numbytes) {
     FILE *fw = fopen("data_recv.bin", "wb");
-    for (int i = 0; i < DATA_SIZ - 1; i++)
+    for (int i = 0; i < numbytes; i++)
     {   
         fwrite((data+i), sizeof(uint16_t), 1, fw);
     }
@@ -163,9 +163,16 @@ repeat:
 	/* UDP payload length */
 	ret = ntohs(udph->len) - sizeof(struct udphdr);
 
+	// for (i=0; i<numbytes; i++) {
+	// 	buf[i] = (buf[i]&0XFF)*256 + (buf[i]>>8);
+	// }
+
+	
 	/* Print packet */
 	printf("\tData:\n");
 	for(i=0; i<(numbytes-16)/2; i++) {
+		// printf("%d\n",buf[16+i*2]);
+		// printf("%d\n",buf[17+i*2]);
 		data_recv[i] = buf[16 + i*2] + buf[17 + i*2]*256;
 		printf2(data_recv[i]);
 	}
@@ -173,7 +180,7 @@ repeat:
 	
 
 	/* Write Data */
-	write_data_recv(data_recv);
+	write_data_recv(data_recv, numbytes/2);
 
 done:	goto repeat;
 

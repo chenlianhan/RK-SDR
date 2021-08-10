@@ -14,13 +14,6 @@
 /*
 Destination MAC : it should be defined accroding to situation
 */
-// #define DEST_MAC0	0xbe
-// #define DEST_MAC1	0x81
-// #define DEST_MAC2	0xbe
-// #define DEST_MAC3	0x9a
-// #define DEST_MAC4	0xb9
-// #define DEST_MAC5	0x9f
-
 #define DEST_MAC0	0x11
 #define DEST_MAC1	0x22
 #define DEST_MAC2	0x33
@@ -32,8 +25,7 @@ Destination MAC : it should be defined accroding to situation
 #define ETHER_TYPE	0x0900
 
 #define DEFAULT_IF	"eth0"
-#define BUF_SIZ		1500
-#define DATA_SIZ 	720
+#define BUF_SIZ		750
 
 void printf2(uint16_t n) {
     uint16_t i = 0;
@@ -44,17 +36,7 @@ void printf2(uint16_t n) {
             printf("0");
         }
     }
-    printf("\n");
-}
-
-void write_data_recv(uint16_t data[]) {
-    FILE *fw = fopen("data_recv.bin", "wb");
-    for (int i = 0; i < DATA_SIZ - 1; i++)
-    {   
-        fwrite((data+i), sizeof(uint16_t), 1, fw);
-    }
-
-    fclose(fw);
+    printf(",");
 }
 
 int main(int argc, char *argv[])
@@ -66,8 +48,7 @@ int main(int argc, char *argv[])
 	struct ifreq ifopts;	/* set promiscuous mode */
 	struct ifreq if_ip;	    /* get ip addr */
 	struct sockaddr_storage their_addr;
-	uint8_t buf[BUF_SIZ];   /* storage receive bytes frome socket*/
-	uint16_t data_recv[DATA_SIZ - 1];	/* storage data after byte combination */
+	uint16_t buf[BUF_SIZ];   /* storage receive bytes */
 	char ifName[IFNAMSIZ];  /* which interface it receive */
 	
 	/* Get interface name (for paticular interface) */
@@ -85,7 +66,7 @@ int main(int argc, char *argv[])
 
 	/* Open PF_PACKET socket, listening for EtherType ETHER_TYPE */
 
-	// printf("open PF_PACKET socket fd:%d\n",sockfd);
+	printf("open PF_PACKET socket fd:%d\n",sockfd);
 
 	if ((sockfd = socket(PF_PACKET, SOCK_RAW, htons(ETHER_TYPE))) == -1) {
 		perror("listener: socket");	
@@ -94,7 +75,7 @@ int main(int argc, char *argv[])
 
 	/* Set interface to promiscuous mode - Maybe it's useless to do this every time */
 
-	// printf("set interface to p mode\n");
+	printf("set interface to p mode\n");
 
 	strncpy(ifopts.ifr_name, ifName, IFNAMSIZ-1);
 	ioctl(sockfd, SIOCGIFFLAGS, &ifopts);
@@ -117,10 +98,10 @@ int main(int argc, char *argv[])
 repeat:	
     
     printf("listener: Waiting to recvfrom...\n");
-	// printf("sockfd: %d\n",sockfd);
+	printf("sockfd: %d\n",sockfd);
 
 	numbytes = recvfrom(sockfd, buf, BUF_SIZ, 0, NULL, NULL);
-	// printf("numbytes:%ld\n",numbytes);
+	printf("numbytes:%ld\n",numbytes);
 	printf("listener: got packet %lu bytes\n", numbytes);
 
 	/* Check the packet is for me */
@@ -164,16 +145,9 @@ repeat:
 	ret = ntohs(udph->len) - sizeof(struct udphdr);
 
 	/* Print packet */
-	printf("\tData:\n");
-	for(i=0; i<(numbytes-16)/2; i++) {
-		data_recv[i] = buf[16 + i*2] + buf[17 + i*2]*256;
-		printf2(data_recv[i]);
-	}
+	printf("\tData:");
+	for (i=0; i<numbytes; i++) printf2(buf[i]);
 	printf("\n");
-	
-
-	/* Write Data */
-	write_data_recv(data_recv);
 
 done:	goto repeat;
 

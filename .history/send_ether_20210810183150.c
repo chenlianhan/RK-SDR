@@ -466,9 +466,8 @@ void write_frame_data(uint16_t *d, uint16_t data[]) {
  *  Returns
  *      No return.
  **/
-uint16_t * signal_generate(struct arguments *arguments) {
+uint16_t signal_generate(struct arguments *arguments) {
     uint16_t data[DATA_BUFFER - 1];
-    uint16_t *p = data;
 
     unsigned int i = 0;
     unsigned int aver = MAX_LEVEL;
@@ -512,7 +511,7 @@ uint16_t * signal_generate(struct arguments *arguments) {
     arguments->data = &data[0];
     write_data_signal_generating(data);
     write_frame_data(arguments->data, data);
-    return p;
+    return data;
 }
 
 /**
@@ -573,7 +572,7 @@ int send_ether(char const *iface, unsigned char const *to, short type,
     // fill type
     frame.type = htons(type);
 
-    p = signal_generate(arguments);
+    *p = signal_generate(arguments);
     
     // printf("type:%u \n",frame.type);
     // truncate if data is too long
@@ -586,12 +585,12 @@ int send_ether(char const *iface, unsigned char const *to, short type,
     // printf("length:%u \n",frame.length);
     if(file_read == 0) {
         // fill data
-        memcpy(frame.data, p, data_size);
+        memcpy(frame.data, data, data_size);
 
         frame_size = ETHERNET_HEADER_SIZE + data_size;
 
     }else {
-        memcpy(frame.data, p, file_data_size);
+        memcpy(frame.data, data, file_data_size);
 
         frame_size = ETHERNET_HEADER_SIZE + file_data_size;
     }

@@ -14,13 +14,6 @@
 /*
 Destination MAC : it should be defined accroding to situation
 */
-// #define DEST_MAC0	0xbe
-// #define DEST_MAC1	0x81
-// #define DEST_MAC2	0xbe
-// #define DEST_MAC3	0x9a
-// #define DEST_MAC4	0xb9
-// #define DEST_MAC5	0x9f
-
 #define DEST_MAC0	0x11
 #define DEST_MAC1	0x22
 #define DEST_MAC2	0x33
@@ -32,8 +25,7 @@ Destination MAC : it should be defined accroding to situation
 #define ETHER_TYPE	0x0900
 
 #define DEFAULT_IF	"eth0"
-#define BUF_SIZ		1500
-#define DATA_SIZ 	720
+#define BUF_SIZ		750
 
 void printf2(uint16_t n) {
     uint16_t i = 0;
@@ -44,12 +36,12 @@ void printf2(uint16_t n) {
             printf("0");
         }
     }
-    printf("\n");
+    printf(",");
 }
 
 void write_data_recv(uint16_t data[]) {
-    FILE *fw = fopen("data_recv.bin", "wb");
-    for (int i = 0; i < DATA_SIZ - 1; i++)
+    FILE *fw = fopen("data.bin", "wb");
+    for (int i = 0; i < BUF_SIZ; i++)
     {   
         fwrite((data+i), sizeof(uint16_t), 1, fw);
     }
@@ -66,8 +58,7 @@ int main(int argc, char *argv[])
 	struct ifreq ifopts;	/* set promiscuous mode */
 	struct ifreq if_ip;	    /* get ip addr */
 	struct sockaddr_storage their_addr;
-	uint8_t buf[BUF_SIZ];   /* storage receive bytes frome socket*/
-	uint16_t data_recv[DATA_SIZ - 1];	/* storage data after byte combination */
+	uint16_t buf[BUF_SIZ];   /* storage receive bytes */
 	char ifName[IFNAMSIZ];  /* which interface it receive */
 	
 	/* Get interface name (for paticular interface) */
@@ -164,17 +155,13 @@ repeat:
 	ret = ntohs(udph->len) - sizeof(struct udphdr);
 
 	/* Print packet */
-	printf("\tData:\n");
-	for(i=0; i<(numbytes-16)/2; i++) {
-		data_recv[i] = buf[16 + i*2] + buf[17 + i*2]*256;
-		printf2(data_recv[i]);
-	}
+	printf("\tData:");
+	for (i=0; i<numbytes; i++) printf2(buf[i]);
 	printf("\n");
-	
 
 	/* Write Data */
-	write_data_recv(data_recv);
-
+	write_data_recv(buf);
+	
 done:	goto repeat;
 
 	close(sockfd);
